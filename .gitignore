@@ -12,3 +12,13 @@ wheels/
 
 # Personal files
 ethics.md
+
+# Chat logs / agent state (stored outside the repo by default)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store

@@ -1,3 +1,5 @@
+import os
+import shutil
 import sys
 import tty
 import termios
@@ -18,14 +20,38 @@ load_dotenv()
 warnings.filterwarnings("ignore")
 
 ROOT = Path(__file__).parent.resolve()
-PROTECTED = {".env", "agent_state.db"}
+PROTECTED = {".env", "agent_state.db", "agent_state.db-wal", "agent_state.db-shm"}
 MAX_READ_CHARS = 20_000
 
 # ---------------------------------------------------------------------------
 # Database & Checkpointer Setup (SQLite for chat sessions & memory)
 # ---------------------------------------------------------------------------
-DB_PATH = ROOT / "agent_state.db"
+# Chat logs live outside the project folder so they are never committed or
+# exposed to the agent's file tools. Override with AGENTS_DATA_DIR.
+DATA_DIR = Path(
+    os.environ.get("AGENTS_DATA_DIR")
+    or Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "agents"
+).expanduser().resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.chmod(0o700)
+DB_PATH = DATA_DIR / "agent_state.db"
+
+
+def migrate_legacy_db():
+    """Move a chat database left in the project folder by older versions."""
+    legacy = ROOT / "agent_state.db"
+    if not legacy.exists() or DB_PATH.exists():
+        return
+    for suffix in ("", "-wal", "-shm"):
+        src = ROOT / f"agent_state.db{suffix}"
+        if src.exists():
+            shutil.move(src, DATA_DIR / src.name)
+    print(f"Moved chat history to {DB_PATH}")
+
+
+migrate_legacy_db()
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+DB_PATH.chmod(0o600)
 
 def init_db():
     with conn:
